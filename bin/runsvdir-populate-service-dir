@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+
+require "fileutils"
+require "shellwords"
+
+SERVICE_DIR, PROCFILE_PATH = ARGV
+
+def write(ps, name, content)
+  ps_service_dir = File.join(SERVICE_DIR, ps)
+  FileUtils.mkdir_p(ps_service_dir)
+
+  ps_file_path = File.join(ps_service_dir, name)
+  File.open(ps_file_path, "w") do |ps_f|
+    ps_f.puts content
+  end
+  File.chmod(0755, ps_file_path)
+end
+
+File.open(PROCFILE_PATH) do |f|
+  while line = f.gets
+    line.chomp!
+    ps, command = line.split(/:\s+/, 2)
+
+    write(ps, "run", <<EOF
+#!/bin/sh
+cd "$HOME" && exec #{command}
+EOF
+      )
+
+    write(ps, "finish", <<EOF
+#!/bin/sh
+exec pkill -HUP -f #{"runsvdir #{SERVICE_DIR}".shellescape}
+EOF
+      )
+  end
+end
