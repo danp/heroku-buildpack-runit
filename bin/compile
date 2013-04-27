@@ -14,18 +14,19 @@ mkdir -p "$CACHE_DIR"
 cd "$BUILD_DIR"
 
 SW_DIR=.sw
-mkdir $SW_DIR
+mkdir -p $SW_DIR
 
-install () {
+install() {
   DEB_URL=$1
   DIR=$(mktemp -d)
-  curl -f $DEB_URL > $DIR/deb
+  curl -f $DEB_URL -o $DIR/deb
   dpkg-deb -x $DIR/deb $SW_DIR
+  rm -rf $DIR
 }
 
 install http://mirror.anl.gov/pub/ubuntu/pool/universe/r/runit/runit_2.0.0-1ubuntu4_amd64.deb
 
-mkdir .profile.d
+mkdir -p .profile.d
 cat > .profile.d/runit.sh <<EOF
 export PATH="\$HOME/$SW_DIR/usr/bin:\$PATH"
 EOF
