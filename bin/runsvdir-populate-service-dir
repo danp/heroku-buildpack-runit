@@ -23,12 +23,14 @@ File.open(PROCFILE_PATH) do |f|
 
     write(ps, "run", <<EOF
 #!/bin/sh
+echo "buildpack=runit ps=#{ps} at=start"
 cd "$HOME" && exec #{command}
 EOF
       )
 
     write(ps, "finish", <<EOF
 #!/bin/sh
+echo "buildpack=runit ps=#{ps} at=exit status=$1 waitpid_lsb=$2"
 exec pkill -HUP -f #{"runsvdir #{SERVICE_DIR}".shellescape}
 EOF
       )
