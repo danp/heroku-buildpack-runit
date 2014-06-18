@@ -2,7 +2,7 @@
 
 set -e
 
-PS_TYPE=$(echo "$PS" | cut -d. -f1)
+PS_TYPE=$(echo "$DYNO" | cut -d. -f1)
 PS_PROCFILE="Procfile.$PS_TYPE"
 
 if [ ! -f "$PS_PROCFILE" ]; then
