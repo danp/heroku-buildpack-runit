@@ -16,5 +16,4 @@ mkdir "$SERVICE_DIR"
 
 bin/runsvdir-populate-service-dir "$SERVICE_DIR" "$PS_PROCFILE"
 
-export PATH="$SW_DIR/usr/bin:$PATH"
 exec runsvdir "$SERVICE_DIR"
