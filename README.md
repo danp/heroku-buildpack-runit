@@ -25,4 +25,4 @@ unicorn: bundle exec unicorn -c config/unicorn.rb ...
 
 Now, when running a `web` dyno, both the `nginx` and `unicorn` processes will run under runit.
 
-If any process specified in `Process.web` crash, the entire dyno will be restarted.
+If any process specified in `Procfile.web` crashes, the entire dyno will be restarted.
