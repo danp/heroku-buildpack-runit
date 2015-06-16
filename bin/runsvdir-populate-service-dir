@@ -18,8 +18,12 @@ end
 
 File.open(PROCFILE_PATH) do |f|
   while line = f.gets
-    line.chomp!
-    ps, command = line.split(/:\s+/, 2)
+    if line !~ /^([A-Za-z0-9_-]+):\s*(.+)$/
+      next
+    end
+
+    ps = $1
+    command = $2
 
     write(ps, "run", <<EOF
 #!/bin/sh
