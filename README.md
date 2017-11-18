@@ -8,7 +8,7 @@ Imagine you want to run nginx in your `web` dynos, binding to `$PORT`, and front
 
 ## Usage
 
-You'll probably use this in conjunction with [the multi buildpack](https://github.com/ddollar/heroku-buildpack-multi).
+You'll probably use this in conjunction with [multiple buildpacks](https://devcenter.heroku.com/articles/using-multiple-buildpacks-for-an-app).
 
 For every process type (eg `web`) you want to run mulitple processes in, add an entry like this to your `Procfile`:
 
