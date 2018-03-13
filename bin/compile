@@ -19,12 +19,12 @@ mkdir -p $SW_DIR
 install() {
   DEB_URL=$1
   DIR=$(mktemp -d)
-  curl -f $DEB_URL -o $DIR/deb
+  curl -Lf $DEB_URL -o $DIR/deb
   dpkg-deb -x $DIR/deb $SW_DIR
   rm -rf $DIR
 }
 
-install http://mirrors.kernel.org/ubuntu/pool/universe/r/runit/runit_2.1.1-6.2ubuntu3_amd64.deb
+install https://mirrors.edge.kernel.org/ubuntu/pool/universe/r/runit/runit_2.1.1-6.2ubuntu3_amd64.deb
 
 mkdir -p .profile.d
 cat > .profile.d/runit.sh <<EOF
