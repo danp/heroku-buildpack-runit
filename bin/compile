@@ -24,7 +24,7 @@ install() {
   rm -rf $DIR
 }
 
-install https://mirrors.edge.kernel.org/ubuntu/pool/universe/r/runit/runit_2.1.1-6.2ubuntu3_amd64.deb
+install http://archive.ubuntu.com/ubuntu/pool/universe/r/runit/runit_2.1.1-6.2ubuntu3_amd64.deb
 
 mkdir -p .profile.d
 cat > .profile.d/runit.sh <<EOF
