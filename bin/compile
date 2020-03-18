@@ -18,13 +18,15 @@ mkdir -p $SW_DIR
 
 install() {
   DEB_URL=$1
+  CHECKSUM=$2
   DIR=$(mktemp -d)
   curl -Lf $DEB_URL -o $DIR/deb
+  echo "$CHECKSUM  $DIR/deb" | shasum -c -a 256 -
   dpkg-deb -x $DIR/deb $SW_DIR
   rm -rf $DIR
 }
 
-install http://archive.ubuntu.com/ubuntu/pool/universe/r/runit/runit_2.1.1-6.2ubuntu3_amd64.deb
+install http://mirrors.kernel.org/ubuntu/pool/universe/r/runit/runit_2.1.2-9.2ubuntu1_amd64.deb 1029370f74fd24e46d6d16d118acdaaf05ee8d77260526f09d45d49402fd9402
 
 mkdir -p .profile.d
 cat > .profile.d/runit.sh <<EOF
