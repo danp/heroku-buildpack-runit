@@ -35,4 +35,3 @@ EOF
 
 mkdir -p bin
 cp "$BUILDPACK_DIR/bin/runsvdir-dyno" bin
-cp "$BUILDPACK_DIR/bin/runsvdir-populate-service-dir" bin

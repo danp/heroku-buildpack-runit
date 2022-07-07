@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -14,6 +14,31 @@ SERVICE_DIR=".service.$PS_TYPE"
 rm -rf "$SERVICE_DIR"
 mkdir "$SERVICE_DIR"
 
-bin/runsvdir-populate-service-dir "$SERVICE_DIR" "$PS_PROCFILE"
+cat "$PS_PROCFILE" | \
+  while read -r line; do
+    regex='^([a-zA-Z0-9_\-]+):\s*(.*)$'
+
+    if [[ $line =~ $regex ]]; then
+      ps="${BASH_REMATCH[1]}"
+      cmd="${BASH_REMATCH[2]}"
+      svdir="$SERVICE_DIR/$ps"
+
+      mkdir -p "$svdir"
+
+      cat <<-EOF | sed 's/\s\{8\}//' > "$svdir/run"
+        #!/bin/sh
+        echo "buildpack=runit ps=$ps at=start"
+        cd "\$HOME" && exec $cmd
+			EOF
+      chmod 0755 "$svdir/run"
+
+      cat <<-EOF | sed 's/\s\{8\}//' > "$svdir/finish"
+        #!/bin/sh
+        echo "buildpack=runit at=exit status=\$1 waitpid_lsb=\$2"
+        exec pkill -HUP -f 'runsvdir "$SERVICE_DIR"'
+			EOF
+      chmod 0755 "$svdir/finish"
+    fi
+  done
 
 exec runsvdir "$SERVICE_DIR"
