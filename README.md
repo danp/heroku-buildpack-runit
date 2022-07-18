@@ -13,7 +13,7 @@ You'll probably use this in conjunction with [multiple buildpacks](https://devce
 For every process type (eg `web`) you want to run mulitple processes in, add an entry like this to your `Procfile`:
 
 ```
-web: bin/runsvdir-dyno
+web: runsvdir-dyno
 ```
 
 Then, create a `Procfile.web` file (where `web` matches the process type in `Procfile`). It might look like this:

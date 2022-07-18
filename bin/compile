@@ -1,37 +1,72 @@
 #!/bin/bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
 
 set -e
 set -o pipefail
 
-unset GIT_DIR
-
 BUILD_DIR="$1"
-BUILDPACK_DIR="$(dirname $(dirname $0))"
-CACHE_DIR="$2"
+BUILDPACK_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
-mkdir -p "$BUILD_DIR"
-mkdir -p "$CACHE_DIR"
-cd "$BUILD_DIR"
+# dest is the directory where the build artifacts will be installed to.
+dest="$BUILD_DIR/vendor/runit"
 
-SW_DIR=.sw
-mkdir -p $SW_DIR
+function compile() {
+  set +e
 
-install() {
-  DEB_URL=$1
-  CHECKSUM=$2
-  DIR=$(mktemp -d)
-  curl -Lf $DEB_URL -o $DIR/deb
-  echo "$CHECKSUM  $DIR/deb" | shasum -c -a 256 -
-  dpkg-deb -x $DIR/deb $SW_DIR
-  rm -rf $DIR
+  (
+    # Only applies to this sub-shell
+    set -e
+
+    # Logs for the sub-shell go to /tmp/runit.log for printing in case of an
+    # error.
+    exec > /tmp/runit.log 2>&1
+
+    # Use a temporary directory to extract and compile the source
+    cd "$(mktemp -d)"
+
+    mkdir -p "$dest"
+    mkdir -p "$dest/bin"
+
+    # Extract just the source into the build directory
+    tar -xz --wildcards --strip-components=3 -f "$BUILDPACK_DIR/src/runit-2.1.2.tar.gz" "*/src/*"
+
+    # Patch runsvdir to ignore the "supervise" directory so we can have
+    # sub-service directories in a parent service directory (example below).
+    # Without this, runsvdir tries to start a `supervise` service and fails
+    # with errors.
+    #
+    # Example:
+    #   sv/web/run
+    #   sv/web/puma/run
+    patch -i "$BUILDPACK_DIR/src/supervise.patch" -u runsvdir.c
+
+    # Compile just the commands we need
+    make -j "$(nproc --all)" sv runsv runsvdir
+
+    # Copy runit commands to vendored path
+    cp sv runsv runsvdir "$dest/bin"
+
+    # Copy the runsvdir-dyno (Procfile style definition helper) into bin
+    cp "$BUILDPACK_DIR/bin/runsvdir-dyno" "$dest/bin"
+  )
+
+  retVal=$?
+  if [[ $retVal -ne 0 ]]; then
+    echo " !     runit: Failed to compile runit"
+    cat /tmp/runit.log
+
+    exit $retVal
+  fi
+
+  # Reenable exit on failure
+  set -e
 }
 
-install http://mirrors.kernel.org/ubuntu/pool/universe/r/runit/runit_2.1.2-9.2ubuntu1_amd64.deb 1029370f74fd24e46d6d16d118acdaaf05ee8d77260526f09d45d49402fd9402
+echo "-----> runit: Compiling"
+compile
 
-mkdir -p .profile.d
-cat > .profile.d/runit.sh <<EOF
-export PATH="\$HOME/$SW_DIR/usr/bin:\$PATH"
+# Adds vendored runit binaries to the path.
+mkdir -p "$BUILD_DIR/.profile.d"
+cat <<'EOF' > "$BUILD_DIR/.profile.d/runit.sh"
+export PATH=$PATH:/app/vendor/runit/bin
 EOF
-
-mkdir -p bin
-cp "$BUILDPACK_DIR/bin/runsvdir-dyno" bin

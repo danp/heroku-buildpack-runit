@@ -1,0 +1,18 @@
+--- org/src/runsvdir.c	2014-08-10 14:22:35.000000000 -0400
++++ new/src/runsvdir.c	2020-03-05 21:02:11.788799538 -0500
+@@ -15,6 +15,7 @@
+ #include "iopause.h"
+ #include "sig.h"
+ #include "ndelay.h"
++#include "string.h"
+ 
+ #define USAGE " [-P] dir"
+ #define VERSION "$Id: ecebd0a50510e91639c6a45dda8b0947aa8eb885 $"
+@@ -91,6 +92,7 @@
+   errno =0;
+   while ((d =readdir(dir))) {
+     if (d->d_name[0] == '.') continue;
++    if (strcmp(d->d_name, "supervise") == 0) continue;
+     if (stat(d->d_name, &s) == -1) {
+       warn("unable to stat ", d->d_name);
+       errno =0;
