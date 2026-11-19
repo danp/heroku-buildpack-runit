@@ -1,0 +1,106 @@
+#!/bin/bash
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+test_dir=$(mktemp -d)
+trap 'rm -rf "$test_dir"' EXIT
+
+mkdir -p "$test_dir/bin" "$test_dir/buildpack/bin"
+printf 'test runit package\n' > "$test_dir/package"
+checksum=$(shasum -a 256 "$test_dir/package" | cut -d ' ' -f 1)
+# Exercise real checksum verification with a tiny package instead of a network dependency.
+sed "s/36c9878f57dcd3763da727887eccf32b744d4bf0a36613c9c00ce485773f2e8f/$checksum/g" \
+  "$repo_dir/bin/compile" > "$test_dir/buildpack/bin/compile"
+cp "$repo_dir/bin/runsvdir-dyno" "$test_dir/buildpack/bin/"
+
+cat > "$test_dir/bin/curl" <<'EOF'
+#!/bin/bash
+set -eu
+url= output= connect_timeout= max_time= retry=
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --connect-timeout) connect_timeout=$2; shift 2 ;;
+    --max-time) max_time=$2; shift 2 ;;
+    --retry) retry=$2; shift 2 ;;
+    -o) output=$2; shift 2 ;;
+    https://*) url=$1; shift ;;
+    -Lf) shift ;;
+    *) exit 90 ;;
+  esac
+done
+[[ $connect_timeout == 10 && $max_time == 30 && $retry == 1 ]] || exit 91
+echo "$url" >> "$TEST_ROOT/downloads"
+case "$TEST_MODE:$url" in
+  all-fail:*|primary-fail:*mirrors.edge.kernel.org/*)
+    printf partial > "$output"
+    exit 28 ;;
+  all-invalid:*|primary-invalid:*mirrors.edge.kernel.org/*)
+    printf invalid > "$output" ;;
+  *) cp "$TEST_ROOT/package" "$output" ;;
+esac
+EOF
+
+cat > "$test_dir/bin/dpkg-deb" <<'EOF'
+#!/bin/bash
+set -eu
+[[ $1 == -x ]]
+cmp "$2" "$TEST_ROOT/package"
+echo extracted >> "$TEST_ROOT/extractions"
+EOF
+chmod 0755 "$test_dir/bin/curl" "$test_dir/bin/dpkg-deb"
+
+run_compile() {
+  TEST_ROOT=$test_dir TEST_MODE=$1 PATH="$test_dir/bin:$PATH" \
+    bash "$test_dir/buildpack/bin/compile" "$test_dir/build dir" "$test_dir/cache dir" \
+    > "$test_dir/output" 2>&1
+}
+
+fail() {
+  echo "$1" >&2
+  cat "$test_dir/output" >&2
+  exit 1
+}
+
+reset_cache() {
+  rm -rf "$test_dir/cache dir"
+  : > "$test_dir/downloads"
+  : > "$test_dir/extractions"
+}
+
+reset_cache
+run_compile success || fail 'cold build failed'
+[[ $(wc -l < "$test_dir/downloads") -eq 1 ]] || fail 'expected one download'
+[[ -f "$test_dir/cache dir/runit/$checksum.deb" ]] || fail 'verified package was not cached'
+[[ -f "$test_dir/build dir/.profile.d/runit.sh" ]] || fail 'missing runtime profile'
+cmp "$repo_dir/bin/runsvdir-dyno" "$test_dir/build dir/bin/runsvdir-dyno"
+
+run_compile all-fail || fail 'warm cache build failed'
+[[ $(wc -l < "$test_dir/downloads") -eq 1 ]] || fail 'warm cache accessed the network'
+[[ $(wc -l < "$test_dir/extractions") -eq 2 ]] || fail 'warm cache was not extracted'
+
+printf corrupt > "$test_dir/cache dir/runit/$checksum.deb"
+run_compile success || fail 'corrupt cache was not repaired'
+[[ $(wc -l < "$test_dir/downloads") -eq 2 ]] || fail 'corrupt cache was not downloaded again'
+cmp "$test_dir/package" "$test_dir/cache dir/runit/$checksum.deb"
+
+for mode in primary-fail primary-invalid; do
+  reset_cache
+  run_compile "$mode" || fail "$mode did not use fallback"
+  [[ $(wc -l < "$test_dir/downloads") -eq 2 ]] || fail 'expected two download sources'
+  [[ $(head -n 1 "$test_dir/downloads") == https://mirrors.edge.kernel.org/* ]] || fail 'wrong primary'
+  [[ $(tail -n 1 "$test_dir/downloads") == https://archive.ubuntu.com/* ]] || fail 'wrong fallback'
+  cmp "$test_dir/package" "$test_dir/cache dir/runit/$checksum.deb"
+done
+
+for mode in all-fail all-invalid; do
+  reset_cache
+  if run_compile "$mode"; then
+    fail "$mode unexpectedly succeeded"
+  fi
+  [[ $(wc -l < "$test_dir/downloads") -eq 2 ]] || fail 'both sources were not attempted'
+  [[ ! -s $test_dir/extractions ]] || fail 'invalid package was extracted'
+  [[ -z $(find "$test_dir/cache dir/runit" -mindepth 1 -print) ]] || fail 'failed download left cache contents'
+done
+
+echo 'compile tests passed'
