@@ -27,13 +27,24 @@ Now, when running a `web` dyno, both the `nginx` and `unicorn` processes will ru
 
 If any process specified in `Procfile.web` crashes, the entire dyno will be restarted.
 
+## Build downloads
+
+The runit package is cached in Heroku's build cache and checked against its pinned
+SHA-256 before every use. Missing or invalid cache entries are downloaded from
+`mirrors.edge.kernel.org`, falling back to `archive.ubuntu.com` if the download or
+checksum verification fails. Each source has a 10-second connection timeout, a
+30-second transfer timeout, and one retry. Only verified downloads enter the cache;
+the build fails if neither source provides a valid package.
+
 ## Testing
 
-Run the supervisor lifecycle regression test directly:
+Run the compile and supervisor lifecycle regression tests directly:
 
 ```sh
+bash test/compile
 test/runsvdir-dyno
 ```
 
-The test uses a temporary Procfile and a stub `runsvdir`; it does not require a
-Heroku app or an installed copy of runit.
+The compile test uses stub downloads and extraction with real checksum checks.
+The supervisor test uses a temporary Procfile and a stub `runsvdir`. Neither needs
+network access, a Heroku app, or an installed copy of runit.

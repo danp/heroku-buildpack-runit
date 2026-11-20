@@ -6,7 +6,7 @@ set -o pipefail
 unset GIT_DIR
 
 BUILD_DIR="$1"
-BUILDPACK_DIR="$(dirname $(dirname $0))"
+BUILDPACK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CACHE_DIR="$2"
 
 mkdir -p "$BUILD_DIR"
@@ -14,19 +14,48 @@ mkdir -p "$CACHE_DIR"
 cd "$BUILD_DIR"
 
 SW_DIR=.sw
-mkdir -p $SW_DIR
+mkdir -p "$SW_DIR"
 
 install() {
-  DEB_URL=$1
-  CHECKSUM=$2
-  DIR=$(mktemp -d)
-  curl -Lf $DEB_URL -o $DIR/deb
-  echo "$CHECKSUM  $DIR/deb" | shasum -c -a 256 -
-  dpkg-deb -x $DIR/deb $SW_DIR
-  rm -rf $DIR
+  CHECKSUM=$1
+  shift
+  PACKAGE_CACHE="$CACHE_DIR/runit"
+  CACHED_DEB="$PACKAGE_CACHE/$CHECKSUM.deb"
+  mkdir -p "$PACKAGE_CACHE"
+
+  if [[ -f "$CACHED_DEB" ]] && echo "$CHECKSUM  $CACHED_DEB" | shasum -c -a 256 - > /dev/null 2>&1; then
+    echo "-----> Using cached runit package"
+  else
+    rm -f "$CACHED_DEB"
+    DIR=$(mktemp -d "$PACKAGE_CACHE/download.XXXXXX")
+    trap 'rm -rf "$DIR"' EXIT
+
+    for DEB_URL in "$@"; do
+      echo "-----> Downloading runit from $DEB_URL"
+      if curl -Lf --connect-timeout 10 --max-time 30 --retry 1 "$DEB_URL" -o "$DIR/deb" &&
+          echo "$CHECKSUM  $DIR/deb" | shasum -c -a 256 -; then
+        # Publish only verified downloads; a failed build must not poison the cache.
+        mv "$DIR/deb" "$CACHED_DEB"
+        break
+      fi
+      echo "-----> Download or checksum failed for $DEB_URL" >&2
+    done
+
+    if [[ ! -f "$CACHED_DEB" ]]; then
+      echo "Unable to download a verified runit package from any source" >&2
+      return 1
+    fi
+    rm -rf "$DIR"
+    trap - EXIT
+  fi
+
+  dpkg-deb -x "$CACHED_DEB" "$SW_DIR"
 }
 
-install https://mirrors.edge.kernel.org/ubuntu/pool/universe/r/runit/runit_2.3.0-1ubuntu1_amd64.deb 36c9878f57dcd3763da727887eccf32b744d4bf0a36613c9c00ce485773f2e8f
+PACKAGE_PATH=ubuntu/pool/universe/r/runit/runit_2.3.0-1ubuntu1_amd64.deb
+install 36c9878f57dcd3763da727887eccf32b744d4bf0a36613c9c00ce485773f2e8f \
+  "https://mirrors.edge.kernel.org/$PACKAGE_PATH" \
+  "https://archive.ubuntu.com/$PACKAGE_PATH"
 
 mkdir -p .profile.d
 cat > .profile.d/runit.sh <<EOF
