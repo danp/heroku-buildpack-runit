@@ -41,10 +41,13 @@ the build fails if neither source provides a valid package.
 Run the compile and supervisor lifecycle regression tests directly:
 
 ```sh
-bash test/compile
+test/compile
 test/runsvdir-dyno
 ```
 
 The compile test uses stub downloads and extraction with real checksum checks.
 The supervisor test uses a temporary Procfile and a stub `runsvdir`. Neither needs
 network access, a Heroku app, or an installed copy of runit.
+
+GitHub Actions runs both tests and `shellcheck bin/* test/*` on pushes and pull
+requests.
