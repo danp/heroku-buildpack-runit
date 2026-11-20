@@ -1,0 +1,19 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - name: Run regression tests
+        run: |
+          test/compile
+          test/runsvdir-dyno
+      - name: Run ShellCheck
+        run: shellcheck bin/* test/*
